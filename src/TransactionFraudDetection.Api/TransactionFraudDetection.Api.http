@@ -1,6 +1,19 @@
 @TransactionFraudDetection.Api_HostAddress = http://localhost:5036
 
-GET {{TransactionFraudDetection.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+POST {{TransactionFraudDetection.Api_HostAddress}}/api/fraud-check
+Content-Type: application/json
+
+{
+  "transaction": {
+    "id": "txn-1",
+    "accountId": "acct-1",
+    "amount": 7500.00,
+    "currency": "USD",
+    "timestamp": "2024-01-01T12:00:00Z",
+    "merchantCountry": "RU",
+    "accountHomeCountry": "US"
+  },
+  "recentTransactions": []
+}
 
 ###

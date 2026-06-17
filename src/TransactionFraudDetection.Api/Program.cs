@@ -1,8 +1,17 @@
+using TransactionFraudDetection.Domain;
+using TransactionFraudDetection.Domain.Rules;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddSingleton<IFraudRule, HighAmountRule>();
+builder.Services.AddSingleton<IFraudRule, VelocityRule>();
+builder.Services.AddSingleton<IFraudRule, GeoMismatchRule>();
+builder.Services.AddSingleton<IFraudRule, OddHoursRule>();
+builder.Services.AddSingleton<FraudDetectionEngine>();
 
 var app = builder.Build();
 
@@ -14,28 +23,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapPost("/api/fraud-check", (FraudCheckContext context, FraudDetectionEngine engine) =>
+    engine.Evaluate(context))
+    .WithName("CheckTransactionForFraud");
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
