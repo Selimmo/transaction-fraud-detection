@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TransactionFraudDetection.Api/TransactionFraudDetection.Api.csproj" />
+    <Project Path="src/TransactionFraudDetection.Domain/TransactionFraudDetection.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TransactionFraudDetection.Domain.Tests/TransactionFraudDetection.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
