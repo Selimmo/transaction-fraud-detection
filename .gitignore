@@ -50,3 +50,6 @@ package.json
 
 # Worker explanation output (runtime-generated, keyed by transaction id)
 output/
+
+# Api archive of notifications that failed to publish to SQS
+failed-publishes/
