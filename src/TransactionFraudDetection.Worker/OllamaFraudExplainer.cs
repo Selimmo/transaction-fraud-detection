@@ -16,7 +16,8 @@ public class OllamaFraudExplainer(HttpClient httpClient, string model = "qwen3:8
         var body = await response.Content.ReadFromJsonAsync<OllamaGenerateResponse>()
             ?? throw new InvalidOperationException("Ollama returned an empty or malformed response body.");
 
-        return body.Response;
+        return body.Response
+            ?? throw new InvalidOperationException("Ollama returned a response body with no 'response' field.");
     }
 
     private record OllamaGenerateRequest(
