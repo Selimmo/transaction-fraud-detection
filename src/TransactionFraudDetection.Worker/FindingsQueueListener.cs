@@ -2,23 +2,22 @@ using System.Text.Json;
 using Amazon.SQS;
 using Amazon.SQS.Model;
 using TransactionFraudDetection.Domain;
+using TransactionFraudDetection.Messaging;
 
 namespace TransactionFraudDetection.Worker;
 
-public class FindingsQueueListener(IAmazonSQS sqsClient, string queueName, FraudExplanationProcessor processor)
+public class FindingsQueueListener(IAmazonSQS sqsClient, SqsQueueResolver queueResolver, FraudExplanationProcessor processor)
 {
-    private string? _queueUrl;
-
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        _queueUrl ??= (await sqsClient.CreateQueueAsync(queueName, cancellationToken)).QueueUrl;
+        var queueUrl = await queueResolver.GetQueueUrlAsync(cancellationToken);
 
         while (!cancellationToken.IsCancellationRequested)
         {
             var response = await sqsClient.ReceiveMessageAsync(
                 new ReceiveMessageRequest
                 {
-                    QueueUrl = _queueUrl,
+                    QueueUrl = queueUrl,
                     MaxNumberOfMessages = 5,
                     WaitTimeSeconds = 10,
                 },
@@ -31,7 +30,7 @@ public class FindingsQueueListener(IAmazonSQS sqsClient, string queueName, Fraud
 
                 await processor.ProcessAsync(notification);
 
-                await sqsClient.DeleteMessageAsync(_queueUrl, message.ReceiptHandle, cancellationToken);
+                await sqsClient.DeleteMessageAsync(queueUrl, message.ReceiptHandle, cancellationToken);
             }
         }
     }

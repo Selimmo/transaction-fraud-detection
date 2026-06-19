@@ -1,16 +1,30 @@
-using Amazon.Runtime;
-using Amazon.SQS;
+using Microsoft.Extensions.Configuration;
+using TransactionFraudDetection.Messaging;
 using TransactionFraudDetection.Worker;
 
-var sqsClient = new AmazonSQSClient(
-    new BasicAWSCredentials("test", "test"),
-    new AmazonSQSConfig { ServiceURL = "http://localhost:4566", AuthenticationRegion = "us-east-1" });
+var appEnvironment = new AppEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Production");
 
-var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:11434") };
-var explainer = new OllamaFraudExplainer(httpClient);
-var fileWriter = new ExplanationFileWriter(Path.Combine(Directory.GetCurrentDirectory(), "output"));
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: true)
+    .AddJsonFile($"appsettings.{appEnvironment.Name}.json", optional: true)
+    .AddEnvironmentVariables()
+    .Build();
+
+var sqsOptions = configuration.GetSection("Sqs").Get<SqsOptions>()
+    ?? throw new InvalidOperationException("Missing 'Sqs' configuration section.");
+var ollamaOptions = configuration.GetSection("Ollama").Get<OllamaOptions>()
+    ?? throw new InvalidOperationException("Missing 'Ollama' configuration section.");
+var outputDirectory = configuration["OutputDirectory"] ?? "output";
+
+var sqsClient = SqsClientFactory.Create(sqsOptions, appEnvironment);
+var queueResolver = new SqsQueueResolver(sqsClient, sqsOptions.QueueName);
+
+var httpClient = new HttpClient { BaseAddress = new Uri(ollamaOptions.BaseUrl) };
+var explainer = new OllamaFraudExplainer(httpClient, ollamaOptions.Model);
+var fileWriter = new ExplanationFileWriter(Path.Combine(Directory.GetCurrentDirectory(), outputDirectory));
 var processor = new FraudExplanationProcessor(explainer, fileWriter);
-var listener = new FindingsQueueListener(sqsClient, queueName: "fraud-check-findings", processor);
+var listener = new FindingsQueueListener(sqsClient, queueResolver, processor);
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>

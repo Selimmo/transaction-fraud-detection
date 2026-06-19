@@ -7,12 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.SQS" Version="4.0.3.6" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TransactionFraudDetection.Domain\TransactionFraudDetection.Domain.csproj" />
+    <ProjectReference Include="..\TransactionFraudDetection.Messaging\TransactionFraudDetection.Messaging.csproj" />
   </ItemGroup>
 
 </Project>

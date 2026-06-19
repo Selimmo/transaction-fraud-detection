@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/TransactionFraudDetection.Api/TransactionFraudDetection.Api.csproj" />
     <Project Path="src/TransactionFraudDetection.Domain/TransactionFraudDetection.Domain.csproj" />
+    <Project Path="src/TransactionFraudDetection.Messaging/TransactionFraudDetection.Messaging.csproj" />
     <Project Path="src/TransactionFraudDetection.Worker/TransactionFraudDetection.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">

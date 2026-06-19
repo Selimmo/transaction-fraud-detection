@@ -24,10 +24,18 @@ Core flow: `Api` receives a transaction, builds a `FraudCheckContext`, passes it
 
 `Domain` has zero dependencies on `Api` or `Worker`, so the rule set and the message contract are testable without spinning up a host or a queue.
 
+### Messaging (`src/TransactionFraudDetection.Messaging`)
+
+Shared SQS plumbing used by both `Api` and `Worker`, so the queue-connection and queue-URL-resolution behavior can't drift between the producer and the consumer.
+
+- `SqsOptions` — `ServiceUrl`, `Region`, `AccessKey`, `SecretKey`, `QueueName`. Bound from each process's own `appsettings.json` `"Sqs"` section (see Configuration below) — the shape is shared, the config file is not.
+- `SqsClientFactory.Create(SqsOptions)` — builds an `IAmazonSQS` pointed at LocalStack with the configured dummy credentials.
+- `SqsQueueResolver` — wraps the idempotent "create queue, cache its URL" pattern (SQS `CreateQueue` is a no-op if the queue already exists) so neither `SqsFindingsPublisher` nor `FindingsQueueListener` duplicate that caching logic.
+
 ### Api (`src/TransactionFraudDetection.Api`)
 
 - Registers each rule as `IFraudRule` (`AddSingleton`) plus the engine, and exposes `POST /api/fraud-check`: accepts a `FraudCheckContext`, evaluates it, publishes the resulting `FraudCheckNotification` via `SqsFindingsPublisher`, then returns the `FraudCheckResult`. No controllers — minimal API route registration in `Program.cs`.
-- `SqsFindingsPublisher` wraps `IAmazonSQS`. It creates the `fraud-check-findings` queue idempotently (SQS `CreateQueue` is a no-op if the queue already exists) and caches the queue URL for the lifetime of the singleton.
+- `SqsFindingsPublisher` takes the shared `IAmazonSQS` + `SqsQueueResolver` and sends the serialized notification to the resolved queue URL.
 - The SQS client is configured to talk to LocalStack (`http://localhost:4566`) with dummy credentials — there is no real AWS account involved. If LocalStack isn't running, publishing (and therefore the whole request) fails.
 
 ### Worker (`src/TransactionFraudDetection.Worker`)
@@ -36,21 +44,30 @@ A standalone console app, run as its own process — not embedded in the Api.
 
 - `FindingsQueueListener` long-polls the `fraud-check-findings` queue, deserializes each message into a `FraudCheckNotification`, hands it to `FraudExplanationProcessor`, then deletes the message.
 - `FraudExplanationProcessor` is the orchestration core: if `Result.IsFraudulent` is false, it does nothing (no LLM call, no file). If true, it builds a prompt via `FraudExplanationPromptBuilder`, calls `IFraudExplainer.ExplainAsync`, and writes the result via `ExplanationFileWriter`.
-- `IFraudExplainer` is the one seam in the Worker with an interface — it exists so `FraudExplanationProcessor` can be unit tested with a fake instead of a real LLM call. `OllamaFraudExplainer` is the real implementation: calls a local Ollama instance (`http://localhost:11434/api/generate`, model `qwen3:8b`, `"think": false` to skip reasoning output) and returns the `response` field.
+- `IFraudExplainer` is the one seam in the Worker with an interface — it exists so `FraudExplanationProcessor` can be unit tested with a fake instead of a real LLM call. `OllamaFraudExplainer` is the real implementation: calls a local Ollama instance (model and base URL from `OllamaOptions`, `"think": false` to skip reasoning output) and returns the `response` field.
 - `ExplanationFileWriter` and `FindingsQueueListener` are concrete classes, not interfaces — they're IO boundaries (filesystem, SQS) that get exercised directly against a temp directory or real LocalStack rather than mocked.
-- Output: `output/{transactionId}.json` (relative to the working directory the worker is started from), containing the `FraudCheckNotification` plus the explanation text. Only written for fraudulent findings.
+- Output: `{OutputDirectory}/{transactionId}.json` (`OutputDirectory` from config, relative to the working directory the worker is started from), containing the `FraudCheckNotification` plus the explanation text. Only written for fraudulent findings.
+- Unlike the Api, `Worker` isn't an ASP.NET Core host, so it builds its own `IConfiguration` by hand in `Program.cs` (`ConfigurationBuilder` + `AddJsonFile("appsettings.json")` + `AddEnvironmentVariables()`) to get the same appsettings-plus-env-var-override behavior the Api gets for free from `WebApplication.CreateBuilder`.
+
+### Configuration
+
+Both `Api` and `Worker` read settings from their own `appsettings.json` (never hardcoded in source) with environment-variable overrides via the standard ASP.NET Core double-underscore convention, e.g. `Sqs__ServiceUrl=...`, `Ollama__Model=...` — no `.env` file or extra parsing library needed, since `Microsoft.Extensions.Configuration`'s environment-variables provider already does this.
+
+- Api's `appsettings.json`: `"Sqs"` section (`SqsOptions` shape).
+- Worker's `appsettings.json`: `"Sqs"` section, plus `"Ollama"` (`OllamaOptions`: `BaseUrl`, `Model`) and `"OutputDirectory"`.
 
 ## Solution layout
 
 - `TransactionFraudDetection.slnx` — solution file (.slnx format, not the older .sln XML format)
-- `src/TransactionFraudDetection.Api` — ASP.NET Core Web API host (`Microsoft.NET.Sdk.Web`), minimal API style (no controllers). References `Domain`.
-- `src/TransactionFraudDetection.Domain` — class library holding the fraud detection logic (rules, models, the scoring engine, the `FraudCheckNotification` message contract). No dependencies on `Api` or `Worker` — keep it that way so it stays host-agnostic and unit-testable in isolation.
-- `src/TransactionFraudDetection.Worker` — console app that consumes the findings queue and produces LLM explanations. References `Domain`.
+- `src/TransactionFraudDetection.Api` — ASP.NET Core Web API host (`Microsoft.NET.Sdk.Web`), minimal API style (no controllers). References `Domain` and `Messaging`.
+- `src/TransactionFraudDetection.Domain` — class library holding the fraud detection logic (rules, models, the scoring engine, the `FraudCheckNotification` message contract). No dependencies on `Api`, `Worker`, or `Messaging` — keep it that way so it stays host-agnostic and unit-testable in isolation.
+- `src/TransactionFraudDetection.Messaging` — class library holding the shared SQS plumbing (`SqsOptions`, `SqsClientFactory`, `SqsQueueResolver`). No dependency on `Domain` — it knows nothing about fraud checks, only about resolving/connecting to a named queue.
+- `src/TransactionFraudDetection.Worker` — console app that consumes the findings queue and produces LLM explanations. References `Domain` and `Messaging`.
 - `tests/TransactionFraudDetection.Domain.Tests` — xUnit tests for the `Domain` project.
 - `tests/TransactionFraudDetection.Worker.Tests` — xUnit tests for the `Worker` project (prompt building and explanation orchestration, via a fake `IFraudExplainer`).
 - `docker-compose.yml` — LocalStack (SQS only), pinned to `localstack/localstack:3.0.2` (the unauthenticated community image; `:latest` requires a license token and fails to start without one).
 
-Dependency direction is `Api -> Domain`, `Worker -> Domain`, `Domain.Tests -> Domain`, `Worker.Tests -> Worker`. `Domain` has no project references.
+Dependency direction is `Api -> Domain`, `Api -> Messaging`, `Worker -> Domain`, `Worker -> Messaging`, `Domain.Tests -> Domain`, `Worker.Tests -> Worker`. `Domain` and `Messaging` have no project references between them or to anything else.
 
 ## Commands
 

@@ -1,8 +1,8 @@
-using Amazon.Runtime;
 using Amazon.SQS;
 using TransactionFraudDetection.Api;
 using TransactionFraudDetection.Domain;
 using TransactionFraudDetection.Domain.Rules;
+using TransactionFraudDetection.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,11 +16,15 @@ builder.Services.AddSingleton<IFraudRule, GeoMismatchRule>();
 builder.Services.AddSingleton<IFraudRule, OddHoursRule>();
 builder.Services.AddSingleton<FraudDetectionEngine>();
 
-builder.Services.AddSingleton<IAmazonSQS>(_ => new AmazonSQSClient(
-    new BasicAWSCredentials("test", "test"),
-    new AmazonSQSConfig { ServiceURL = "http://localhost:4566", AuthenticationRegion = "us-east-1" }));
+var sqsOptions = builder.Configuration.GetSection("Sqs").Get<SqsOptions>()
+    ?? throw new InvalidOperationException("Missing 'Sqs' configuration section.");
+
+builder.Services.AddSingleton<IAppEnvironment>(new AppEnvironment(builder.Environment.EnvironmentName));
+builder.Services.AddSingleton<IAmazonSQS>(sp =>
+    SqsClientFactory.Create(sqsOptions, sp.GetRequiredService<IAppEnvironment>()));
 builder.Services.AddSingleton(sp =>
-    new SqsFindingsPublisher(sp.GetRequiredService<IAmazonSQS>(), queueName: "fraud-check-findings"));
+    new SqsQueueResolver(sp.GetRequiredService<IAmazonSQS>(), sqsOptions.QueueName));
+builder.Services.AddSingleton<SqsFindingsPublisher>();
 
 var app = builder.Build();
 
