@@ -25,13 +25,29 @@ public class FindingsQueueListener(IAmazonSQS sqsClient, SqsQueueResolver queueR
 
             foreach (var message in response.Messages)
             {
-                var notification = JsonSerializer.Deserialize<FraudCheckNotification>(message.Body)
-                    ?? throw new InvalidOperationException($"Could not deserialize message {message.MessageId}");
-
-                await processor.ProcessAsync(notification);
-
-                await sqsClient.DeleteMessageAsync(queueUrl, message.ReceiptHandle, cancellationToken);
+                await ProcessMessageAsync(queueUrl, message, cancellationToken);
             }
+        }
+    }
+
+    private async Task ProcessMessageAsync(string queueUrl, Message message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var notification = JsonSerializer.Deserialize<FraudCheckNotification>(message.Body)
+                ?? throw new InvalidOperationException($"Could not deserialize message {message.MessageId}");
+
+            await processor.ProcessAsync(notification);
+
+            await sqsClient.DeleteMessageAsync(queueUrl, message.ReceiptHandle, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Leave the message undeleted so SQS redelivers it; after the queue's
+            // maxReceiveCount is exceeded it moves to the dead-letter queue instead
+            // of looping here forever.
+            //TODO: perhaps publish to an error queue
+            Console.Error.WriteLine($"Failed to process message {message.MessageId}: {ex}");
         }
     }
 }
