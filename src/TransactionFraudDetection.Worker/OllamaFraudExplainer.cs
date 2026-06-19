@@ -13,9 +13,10 @@ public class OllamaFraudExplainer(HttpClient httpClient, string model = "qwen3:8
 
         response.EnsureSuccessStatusCode();
 
-        var body = await response.Content.ReadFromJsonAsync<OllamaGenerateResponse>();
+        var body = await response.Content.ReadFromJsonAsync<OllamaGenerateResponse>()
+            ?? throw new InvalidOperationException("Ollama returned an empty or malformed response body.");
 
-        return body?.Response ?? string.Empty;
+        return body.Response;
     }
 
     private record OllamaGenerateRequest(

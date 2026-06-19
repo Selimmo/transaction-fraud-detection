@@ -20,7 +20,11 @@ var outputDirectory = configuration["OutputDirectory"] ?? "output";
 var sqsClient = SqsClientFactory.Create(sqsOptions, appEnvironment);
 var queueResolver = new SqsQueueResolver(sqsClient, sqsOptions.QueueName, appEnvironment);
 
-var httpClient = new HttpClient { BaseAddress = new Uri(ollamaOptions.BaseUrl) };
+var httpClient = new HttpClient
+{
+    BaseAddress = new Uri(ollamaOptions.BaseUrl),
+    Timeout = TimeSpan.FromSeconds(ollamaOptions.TimeoutSeconds),
+};
 var explainer = new OllamaFraudExplainer(httpClient, ollamaOptions.Model);
 var fileWriter = new ExplanationFileWriter(Path.Combine(Directory.GetCurrentDirectory(), outputDirectory));
 var processor = new FraudExplanationProcessor(explainer, fileWriter);
