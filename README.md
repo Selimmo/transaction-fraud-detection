@@ -95,7 +95,7 @@ curl http://localhost:5036/api/fraud-check -X POST -H "Content-Type: application
 }'
 ```
 
-The Api responds immediately with the verdict. A few seconds later, the Worker (still running in the other terminal) will pick up the corresponding queue message and write `src/TransactionFraudDetection.Worker/output/txn-1.json` containing the transaction, the verdict, and the LLM's explanation. Nothing is written for transactions that aren't flagged fraudulent.
+The Api responds immediately with the verdict. A few seconds later, the Worker (still running in the other terminal) will pick up the corresponding queue message and write `output/txn-1.json`, relative to wherever you started the Worker from (the repo root, if you followed step 4), containing the transaction, the verdict, and the LLM's explanation. Nothing is written for transactions that aren't flagged fraudulent.
 
 **6. Shut down:**
 
@@ -121,3 +121,7 @@ Tests don't touch real LocalStack or Ollama — IO boundaries (the LLM call, the
 - **Anything else** (`appsettings.Production.json`): no `ServiceUrl` or credentials are configured at all. The AWS SDK falls back to its default credential chain — an IAM role, in a real deployment — so there's no secret to manage or rotate in config.
 
 This means the only thing that changes between local and deployed is which `appsettings.{Environment}.json` file loads — the code path is identical either way.
+
+In Development, `SqsQueueResolver` also provisions a dead-letter queue (`{queue}-dlq`) and a `RedrivePolicy` on the main queue, so messages that fail repeatedly stop being redelivered forever and land somewhere inspectable. In a deployed environment this is expected to be provisioned via infrastructure-as-code instead.
+
+If publishing a finding to SQS fails outright (e.g. the queue is unreachable), the Api still returns the verdict — a queue outage shouldn't fail an authorization the payment system is blocked on. The notification is archived to `failed-publishes/` instead of being lost.
