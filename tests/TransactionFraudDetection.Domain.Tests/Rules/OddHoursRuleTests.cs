@@ -53,4 +53,17 @@ public class OddHoursRuleTests
 
         Assert.False(result.Triggered);
     }
+
+    [Fact]
+    public void Evaluates_the_timestamps_own_offset_rather_than_normalizing_to_utc()
+    {
+        // 02:00 at +05:00 is 21:00 UTC the previous day - outside the window in UTC,
+        // but inside it in the timestamp's own offset. The rule must use the latter.
+        var timestamp = new DateTimeOffset(2024, 1, 1, 2, 0, 0, TimeSpan.FromHours(5));
+        var context = new FraudCheckContext(TransactionFactory.Create(timestamp: timestamp), RecentTransactions: []);
+
+        var result = _rule.Evaluate(context);
+
+        Assert.True(result.Triggered);
+    }
 }

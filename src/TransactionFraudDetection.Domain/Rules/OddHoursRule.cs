@@ -10,6 +10,9 @@ public class OddHoursRule : IFraudRule
 
     public FraudRuleResult Evaluate(FraudCheckContext context)
     {
+        // DateTimeOffset.TimeOfDay returns the wall-clock time in the timestamp's own
+        // offset, not normalized to UTC. A transaction timestamped 02:00 at +05:00 is
+        // evaluated as 02:00, not converted to 21:00 UTC.
         var timeOfDay = context.Transaction.Timestamp.TimeOfDay;
         if (timeOfDay < WindowStart || timeOfDay >= WindowEnd)
         {
