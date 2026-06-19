@@ -1,9 +1,7 @@
 namespace TransactionFraudDetection.Domain.Rules;
 
-public class GeoMismatchRule : IFraudRule
+public class GeoMismatchRule(int ruleScore = 30) : IFraudRule
 {
-    private const int RuleScore = 30;
-
     public string Name => "GeoMismatch";
 
     public FraudRuleResult Evaluate(FraudCheckContext context)
@@ -17,6 +15,6 @@ public class GeoMismatchRule : IFraudRule
         return new FraudRuleResult(
             Triggered: true,
             Reason: $"Merchant country {transaction.MerchantCountry} differs from account home country {transaction.AccountHomeCountry}",
-            Score: RuleScore);
+            Score: ruleScore);
     }
 }

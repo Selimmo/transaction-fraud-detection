@@ -66,4 +66,18 @@ public class OddHoursRuleTests
 
         Assert.True(result.Triggered);
     }
+
+    [Fact]
+    public void Uses_the_configured_window_and_score_instead_of_the_defaults()
+    {
+        var rule = new OddHoursRule(windowStart: TimeSpan.FromHours(13), windowEnd: TimeSpan.FromHours(14), ruleScore: 5);
+        var context = new FraudCheckContext(
+            TransactionFactory.Create(timestamp: new DateTimeOffset(2024, 1, 1, 13, 30, 0, TimeSpan.Zero)),
+            RecentTransactions: []);
+
+        var result = rule.Evaluate(context);
+
+        Assert.True(result.Triggered);
+        Assert.Equal(5, result.Score);
+    }
 }

@@ -46,4 +46,16 @@ public class HighAmountRuleTests
         Assert.Equal(50, result.Score);
         Assert.False(string.IsNullOrWhiteSpace(result.Reason));
     }
+
+    [Fact]
+    public void Uses_the_configured_threshold_and_score_instead_of_the_defaults()
+    {
+        var rule = new HighAmountRule(threshold: 100m, ruleScore: 5);
+        var context = new FraudCheckContext(TransactionFactory.Create(amount: 100.01m), RecentTransactions: []);
+
+        var result = rule.Evaluate(context);
+
+        Assert.True(result.Triggered);
+        Assert.Equal(5, result.Score);
+    }
 }

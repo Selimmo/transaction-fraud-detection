@@ -1,10 +1,9 @@
 namespace TransactionFraudDetection.Domain.Rules;
 
-public class OddHoursRule : IFraudRule
+public class OddHoursRule(TimeSpan? windowStart = null, TimeSpan? windowEnd = null, int ruleScore = 20) : IFraudRule
 {
-    private static readonly TimeSpan WindowStart = TimeSpan.FromHours(1);
-    private static readonly TimeSpan WindowEnd = TimeSpan.FromHours(5);
-    private const int RuleScore = 20;
+    private readonly TimeSpan _windowStart = windowStart ?? TimeSpan.FromHours(1);
+    private readonly TimeSpan _windowEnd = windowEnd ?? TimeSpan.FromHours(5);
 
     public string Name => "OddHours";
 
@@ -14,7 +13,7 @@ public class OddHoursRule : IFraudRule
         // offset, not normalized to UTC. A transaction timestamped 02:00 at +05:00 is
         // evaluated as 02:00, not converted to 21:00 UTC.
         var timeOfDay = context.Transaction.Timestamp.TimeOfDay;
-        if (timeOfDay < WindowStart || timeOfDay >= WindowEnd)
+        if (timeOfDay < _windowStart || timeOfDay >= _windowEnd)
         {
             return FraudRuleResult.NotTriggered;
         }
@@ -22,6 +21,6 @@ public class OddHoursRule : IFraudRule
         return new FraudRuleResult(
             Triggered: true,
             Reason: $"Transaction occurred at {timeOfDay:hh\\:mm}, within the high-risk overnight window",
-            Score: RuleScore);
+            Score: ruleScore);
     }
 }

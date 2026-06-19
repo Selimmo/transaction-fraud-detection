@@ -44,4 +44,18 @@ public class GeoMismatchRuleTests
         Assert.True(result.Triggered);
         Assert.Equal(30, result.Score);
     }
+
+    [Fact]
+    public void Uses_the_configured_score_instead_of_the_default()
+    {
+        var rule = new GeoMismatchRule(ruleScore: 5);
+        var context = new FraudCheckContext(
+            TransactionFactory.Create(merchantCountry: "RU", accountHomeCountry: "US"),
+            RecentTransactions: []);
+
+        var result = rule.Evaluate(context);
+
+        Assert.True(result.Triggered);
+        Assert.Equal(5, result.Score);
+    }
 }

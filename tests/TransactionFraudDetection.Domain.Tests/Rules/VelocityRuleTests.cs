@@ -101,4 +101,18 @@ public class VelocityRuleTests
 
         Assert.False(result.Triggered);
     }
+
+    [Fact]
+    public void Uses_the_configured_window_threshold_and_score_instead_of_the_defaults()
+    {
+        var rule = new VelocityRule(window: TimeSpan.FromMinutes(2), maxTransactionsInWindow: 2, ruleScore: 5);
+        var context = new FraudCheckContext(
+            TransactionFactory.Create(accountId: "acct-1", timestamp: Now),
+            RecentTransactions: [TransactionFactory.Create(accountId: "acct-1", timestamp: Now.AddMinutes(-1))]);
+
+        var result = rule.Evaluate(context);
+
+        Assert.True(result.Triggered);
+        Assert.Equal(5, result.Score);
+    }
 }

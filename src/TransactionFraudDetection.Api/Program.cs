@@ -10,11 +10,15 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-builder.Services.AddSingleton<IFraudRule, HighAmountRule>();
-builder.Services.AddSingleton<IFraudRule, VelocityRule>();
-builder.Services.AddSingleton<IFraudRule, GeoMismatchRule>();
-builder.Services.AddSingleton<IFraudRule, OddHoursRule>();
-builder.Services.AddSingleton<FraudDetectionEngine>();
+var fraudRuleOptions = builder.Configuration.GetSection("FraudRules").Get<FraudRulesOptions>() ?? new FraudRulesOptions();
+
+builder.Services.AddSingleton<IFraudRule>(new HighAmountRule(fraudRuleOptions.HighAmountThreshold, fraudRuleOptions.HighAmountScore));
+builder.Services.AddSingleton<IFraudRule>(new VelocityRule(
+    TimeSpan.FromMinutes(fraudRuleOptions.VelocityWindowMinutes), fraudRuleOptions.VelocityMaxTransactionsInWindow, fraudRuleOptions.VelocityScore));
+builder.Services.AddSingleton<IFraudRule>(new GeoMismatchRule(fraudRuleOptions.GeoMismatchScore));
+builder.Services.AddSingleton<IFraudRule>(new OddHoursRule(
+    TimeSpan.FromHours(fraudRuleOptions.OddHoursWindowStartHour), TimeSpan.FromHours(fraudRuleOptions.OddHoursWindowEndHour), fraudRuleOptions.OddHoursScore));
+builder.Services.AddSingleton(sp => new FraudDetectionEngine(sp.GetServices<IFraudRule>(), fraudRuleOptions.RiskThreshold));
 
 var sqsOptions = builder.Configuration.GetSection("Sqs").Get<SqsOptions>()
     ?? throw new InvalidOperationException("Missing 'Sqs' configuration section.");
