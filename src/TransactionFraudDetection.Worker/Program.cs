@@ -18,7 +18,7 @@ var ollamaOptions = configuration.GetSection("Ollama").Get<OllamaOptions>()
 var outputDirectory = configuration["OutputDirectory"] ?? "output";
 
 var sqsClient = SqsClientFactory.Create(sqsOptions, appEnvironment);
-var queueResolver = new SqsQueueResolver(sqsClient, sqsOptions.QueueName);
+var queueResolver = new SqsQueueResolver(sqsClient, sqsOptions.QueueName, appEnvironment);
 
 var httpClient = new HttpClient { BaseAddress = new Uri(ollamaOptions.BaseUrl) };
 var explainer = new OllamaFraudExplainer(httpClient, ollamaOptions.Model);

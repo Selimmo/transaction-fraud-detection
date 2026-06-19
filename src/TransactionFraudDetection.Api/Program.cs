@@ -23,7 +23,7 @@ builder.Services.AddSingleton<IAppEnvironment>(new AppEnvironment(builder.Enviro
 builder.Services.AddSingleton<IAmazonSQS>(sp =>
     SqsClientFactory.Create(sqsOptions, sp.GetRequiredService<IAppEnvironment>()));
 builder.Services.AddSingleton(sp =>
-    new SqsQueueResolver(sp.GetRequiredService<IAmazonSQS>(), sqsOptions.QueueName));
+    new SqsQueueResolver(sp.GetRequiredService<IAmazonSQS>(), sqsOptions.QueueName, sp.GetRequiredService<IAppEnvironment>()));
 builder.Services.AddSingleton<SqsFindingsPublisher>();
 
 var failedPublishDirectory = builder.Configuration["FailedPublishDirectory"] ?? "failed-publishes";
